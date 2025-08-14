@@ -1,0 +1,39 @@
+﻿@model IEnumerable<NotesSampleApplication.Models.Note>
+
+@{
+    ViewData["Title"] = "My Notes";
+}
+
+<h1>My Notes</h1>
+
+<p>
+    <a class="btn btn-primary" asp-action="Create">Create New Note</a>
+</p>
+
+<!-- Logout button -->
+<form asp-area="Identity" asp-page="/Account/Logout" method="post" class="d-inline">
+    <button type="submit" class="btn btn-danger">Logout</button>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Created</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var note in Model)
+        {
+            <tr>
+                <td>@note.Title</td>
+                <td>@note.CreatedAt.ToString("g")</td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@note.Id" class="btn btn-sm btn-warning">Edit</a> |
+                    <a asp-action="Delete" asp-route-id="@note.Id" class="btn btn-sm btn-danger">Delete</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
