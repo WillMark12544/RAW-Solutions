@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NotesSampleApplication.Data;
 using NotesSampleApplication.Models;
+using Microsoft.AspNetCore.Identity.UI.Services;
+using NotesSampleApplication.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,11 +14,15 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Add Identity (with ApplicationUser)
-builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
 })
-.AddEntityFrameworkStores<ApplicationDbContext>();
+.AddRoles<IdentityRole>()
+.AddEntityFrameworkStores<ApplicationDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.AddTransient<IEmailSender, DummyEmailSender>();
 
 // 3. Force session-only cookies (Forces Logout cookies)
 builder.Services.ConfigureApplicationCookie(options =>
@@ -44,7 +51,25 @@ builder.Services.AddDataProtection()
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
+
 var app = builder.Build();
+
+
+
+// Seed roles
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    string[] roleNames = { "Normal", "Disabled", "Admin" };
+
+    foreach (var roleName in roleNames)
+    {
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+}
 
 // Middleware pipeline?
 app.UseHttpsRedirection();

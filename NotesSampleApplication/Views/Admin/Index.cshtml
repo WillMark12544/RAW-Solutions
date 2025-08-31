@@ -1,0 +1,69 @@
+﻿@model IEnumerable<NotesApp.Controllers.AdminController.UserViewModel>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+        body {
+                font-family: 'Inter', sans-serif;
+
+    }
+</style>
+
+<div class="container mx-auto p-8 bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all duration-300 hover:shadow-xl">
+        <div class="px-8 py-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
+            <h2 class="text-3xl font-extrabold tracking-tight">User Management</h2>
+        </div>
+
+        <div class="p-6">
+            <div class="overflow-hidden shadow-sm ring-1 ring-black ring-opacity-5 rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Role</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        @foreach (var user in Model)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors duration-200">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">@user.Email</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                        @user.CurrentRole
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <form asp-controller="Admin" asp-action="ChangeRole" method="post" class="flex items-center space-x-2">
+                                        <input type="hidden" name="userId" value="@user.Id" />
+                                        <select name="newRole" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
+                                            @foreach (var role in user.AllRoles)
+                                            {
+                                                <option value="@role" selected="@(user.CurrentRole == role)">@role</option>
+                                            }
+                                        </select>
+                                        <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                                            Update
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (!Model.Any())
+                {
+                    <div class="py-6 text-center text-gray-500">No users found.</div>
+                }
+            </div>
+        </div>
+    </div>
+
+</div>
