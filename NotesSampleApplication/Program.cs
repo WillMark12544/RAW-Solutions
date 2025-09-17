@@ -5,6 +5,7 @@ using NotesSampleApplication.Data;
 using NotesSampleApplication.Models;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using NotesSampleApplication.Services;
+using Microsoft.Extensions.FileProviders;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +18,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
+    options.Lockout.AllowedForNewUsers = false;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(0);
+    options.Lockout.MaxFailedAccessAttempts = int.MaxValue;
 })
+
 .AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
@@ -52,9 +57,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
 
+
 var app = builder.Build();
-
-
 
 // Seed roles
 using (var scope = app.Services.CreateScope())
@@ -70,6 +74,14 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+
+app.UseFileServer(new FileServerOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "uploads")),
+    RequestPath = "/uploads",
+    EnableDirectoryBrowsing = true
+});
 
 // Middleware pipeline?
 app.UseHttpsRedirection();
@@ -87,5 +99,6 @@ app.MapControllerRoute(
     .RequireAuthorization();
 
 app.MapRazorPages(); // Required for Identity
+
 
 app.Run(); //Test Push

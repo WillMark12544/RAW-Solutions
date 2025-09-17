@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace NotesApp.Controllers
 {
-    [Authorize(Roles = "Admin")] // Only allow logged-in users to access this controller
+    //[Authorize(Roles = "Admin")] // Only allow logged-in users to access this controller
     public class AdminController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
