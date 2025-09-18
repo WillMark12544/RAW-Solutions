@@ -115,11 +115,10 @@ namespace NotesSampleApplication.Areas.Identity.Pages.Account
                 var user = await _userManager.FindByEmailAsync(Input.Email);
                 if (user != null)
                 {
-                    // ❌ Block login if they are in Disabled role
                     if (await _userManager.IsInRoleAsync(user, "Disabled"))
                     {
                         ModelState.AddModelError(string.Empty, "Your account has been disabled. Please contact support.");
-                        return Page(); // Stop here
+                        return Page(); 
                     }
                 }
 
