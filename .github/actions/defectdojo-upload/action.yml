@@ -1,1 +1,83 @@
+name: Uploads security tool output to DefectDojo
+description: Automatically uploads results of a security scan to DefectDojo. Engagement ID and selection of import or reimport scan is automatic.
 
+inputs:
+  file:
+    required: true
+    description: The path to the file of the scan report
+  scan_type:
+    required: true
+    description: The DefectDojo test name e.g. Trivy Scan
+  master_engagement_id:
+    required: true
+    description: DefectDojo engagement ID for the master branch
+  development_engagement_id:
+    required: true
+    description: DefectDojo engagement ID for the development branch
+  defectdojo_api_key:
+    required: true
+    description: API token for DefectDojo
+  defectdojo_host:
+    required: true
+    description: URL of local DefectDojo web instance
+  branch_name:
+    required: true
+    description: Branch name e.g. master, or development
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Upload results to DefectDojo
+      shell: bash
+      env:
+        FILE: ${{ inputs.file }}
+        SCAN_TYPE: ${{ inputs.scan_type }}
+        MASTER_ENGAGEMENT_ID: ${{ inputs.master_engagement_id }}
+        DEVELOPMENT_ENGAGEMENT_ID: ${{ inputs.development_engagement_id }}
+        DEFECTDOJO_API_KEY: ${{ inputs.defectdojo_api_key }}
+        DEFECTDOJO_HOST: ${{ inputs.defectdojo_host }}
+        BRANCH_NAME: ${{ inputs.branch_name }}
+      run: |
+        if [ "$BRANCH_NAME" = "master" ]; then
+          ENGAGEMENT_ID=$MASTER_ENGAGEMENT_ID
+        else
+          ENGAGEMENT_ID=$DEVELOPMENT_ENGAGEMENT_ID
+        fi
+
+        check_test_existance=$(
+          curl -sS -G "$DEFECTDOJO_HOST/api/v2/tests/" \
+            -H "Authorization: Token $DEFECTDOJO_API_KEY" \
+            --data-urlencode "engagement=$ENGAGEMENT_ID" \
+            --data-urlencode "scan_type=$SCAN_TYPE"
+        )
+        
+        test_count=$(jq -r '.count // 0' <<<"$check_test_existance")
+        test_id=$(jq -r '.results[0].id // empty' <<<"$check_test_existance")
+        
+        if (( test_count > 0 )); then
+          endpoint="reimport-scan"
+          echo "$SCAN_TYPE found, Reimporting scan..."
+        else
+          endpoint="import-scan"
+          echo "$SCAN_TYPE not found, Importing scan..."
+        fi
+        
+        if [[ "$endpoint" == "reimport-scan" ]]; then
+          curl -sS -X POST "$DEFECTDOJO_HOST/api/v2/$endpoint/" \
+            -H "Authorization: Token $DEFECTDOJO_API_KEY" \
+            -F "test=$test_id" \
+            -F "scan_type=$SCAN_TYPE" \
+            -F "file=@$FILE" \
+            -F "active=true" \
+            -F "verified=true" \
+            -F "minimum_severity=Low"
+        else
+          curl -sS -X POST "$DEFECTDOJO_HOST/api/v2/$endpoint/" \
+            -H "Authorization: Token $DEFECTDOJO_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=$SCAN_TYPE" \
+            -F "file=@$FILE" \
+            -F "active=true" \
+            -F "verified=true" \
+            -F "minimum_severity=Low"
+        fi
