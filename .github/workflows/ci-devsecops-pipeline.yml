@@ -1,1 +1,393 @@
+name: CI DevSecOps Pipeline
 
+on:
+  # push:
+  #   branches:
+  #     - "master"
+  # pull_request:
+  #   branches:
+  #     - "master"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet build --no-restore
+
+      - name: Run tests
+        run: dotnet test --no-build --verbosity normal
+
+      - name: Build docker image
+        working-directory: Raw-Solutions-TEST-Web-App
+        run: docker build -t myapp:latest .
+
+      - name: Save docker image
+        run: docker save myapp:latest -o myapp.tar
+
+      - name: Upload docker image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myapp-image
+          path: myapp.tar
+          retention-days: 1
+
+  secret-scan:
+    name: Secret Scan w/ Gitleaks
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Gitleaks to run directly
+        # Install latest version of Gitleaks at time of development (8.20.0)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz \
+          | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run Gitleaks Secret Scan
+        run: |
+          gitleaks detect --source . --redact --report-format json --report-path secret-scan-results.json
+
+      - name: Upload Gitleaks Secret Scan output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results
+          path: secret-scan-results.json
+          retention-days: 1
+
+  image-scan:
+    name: Image Scan w/ Trivy
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+  
+      - name: Download docker image for Image Scan
+        uses: actions/download-artifact@v5
+        with:
+          name: myapp-image
+          path: ./myapp-image
+          
+      - name: Load docker image for Image Scan
+        run: docker load -i myapp-image/myapp.tar
+
+      - name: Run Trivy Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: myapp:latest
+          format: 'json'
+          output: 'image-scan-results.json'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload Trivy Image Scan output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-scan-results
+          path: image-scan-results.json
+          retention-days: 1
+
+  ###
+  ### Had to get rid of SonarQube SAST as its client-server, and is too difficult to export to JSON or SARIF
+  ###
+  # sast:
+  #   name: SAST w/ SonarQube      
+  #   runs-on: windows-latest
+  #   needs: 
+  #     - build
+  #   steps:
+  #     - name: Set up JDK 17
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         java-version: 17
+  #         distribution: 'zulu' # Alternative distribution options are available.
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+  #     - name: Cache SonarQube Cloud packages
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ~\sonar\cache
+  #         key: ${{ runner.os }}-sonar
+  #         restore-keys: ${{ runner.os }}-sonar
+  #     - name: Cache SonarQube Cloud scanner
+  #       id: cache-sonar-scanner
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: .\.sonar\scanner
+  #         key: ${{ runner.os }}-sonar-scanner
+  #         restore-keys: ${{ runner.os }}-sonar-scanner
+  #     - name: Install SonarQube Cloud scanner
+  #       if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+  #       shell: powershell
+  #       run: |
+  #         New-Item -Path .\.sonar\scanner -ItemType Directory
+  #         dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
+  #     - name: Build and analyze
+  #       env:
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #       shell: powershell
+  #       run: |
+
+  #         .\.sonar\scanner\dotnet-sonarscanner begin /k:"AlexWandW_Raw-Solutions-TEST-Web-App" /o:"alexwandw" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+  #         dotnet build
+  #         .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+  #     - name: Upload SonarQube output as artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: sast-results
+  #         path: sast-results.json
+  #         retention-days: 1
+
+  # Had to disable due to the Repo needing to be private...
+  # sast:
+  #   name: SAST w/ CodeQL
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     actions: read
+  #     contents: read
+  #     security-events: write
+  #   needs: 
+  #     - build
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Init CodeQL
+  #       uses: github/codeql-action/init@v3
+  #       with:
+  #         languages: csharp, javascript
+  #         queries: security-extended,security-and-quality
+      
+  #     - name: Autobuild project
+  #       uses: github/codeql-action/autobuild@v3
+
+  #     - name: Run CodeQL Analysis
+  #       uses: github/codeql-action/analyze@v3
+  #       with:
+  #         output: sast-results.sarif
+
+  #     - name: Upload CodeQL SAST output as artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: sast-results
+  #         path: sast-results.sarif
+  #         retention-days: 1
+
+  sast:
+    name: SAST w/ Semgrep
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep SAST
+        run: |
+          semgrep \
+          --config p/owasp-top-ten \
+          --config p/security-audit \
+          --config p/csharp \
+          --config p/insecure-transport \
+          --json \
+          --output sast-results.json
+
+      - name: Upload Semgrep SAST output as artifact
+        uses: actions/upload-artifact@v4
+        with: 
+          name: sast-results
+          path: sast-results.json
+          retention-days: 1
+
+  sca:
+    name: SCA w/ Trivy
+    runs-on: ubuntu-latest
+    needs: 
+      - build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy SCA
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'json'
+          output: 'sca-results.json'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy SAST output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-results
+          path: sca-results.json
+          retention-days: 1
+
+  dast:
+    name: DAST w/ OWASP Zap
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - sast
+      - sca
+      - image-scan
+      - secret-scan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download docker image for DAST
+        uses: actions/download-artifact@v5
+        with:
+          name: myapp-image
+          path: ./myapp-image
+
+      - name: Load docker image for DAST
+        run: docker load -i myapp-image/myapp.tar
+
+      - name: Start application docker container from loaded image
+        run: docker run -d -p 8080:8080 --name myapp myapp:latest
+
+      - name: Wait for application to be ready
+        run: |
+          until curl -sf http://localhost:8080; do
+            echo "Waiting for application be ready..."
+            sleep 3
+          done
+
+      - name: Run baseline OWASP ZAP scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with: 
+          target: 'http://localhost:8080'
+          allow_issue_writing: false
+          cmd_options: '-a'
+          
+      - name: Upload ZAP DAST as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-results
+          path: report.json
+          retention-days: 1
+
+  defectdojo-upload:
+    name: Upload scans to local DefectDojo instance
+    runs-on: self-hosted
+    needs:
+      - sast
+      - sca
+      - image-scan
+      - secret-scan
+      - dast
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Image Scan Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: image-scan-results
+          path: ./results
+      
+      - name: Download Secret Scan Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: secret-scan-results
+          path: ./results
+          
+      - name: Donwload SAST Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: sast-results
+          path: ./results
+          
+      - name: Download SCA Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: sca-results
+          path: ./results
+      
+      - name: Download DAST Artifact 
+        uses: actions/download-artifact@v5
+        with:
+          name: dast-results
+          path: ./results
+
+      - name: Upload Image Scan to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/image-scan-results.json
+          scan_type: "Trivy Scan"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
+
+      - name: Upload Secret Scan to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/secret-scan-results.json
+          scan_type: "Gitleaks Scan"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
+
+      - name: Upload SAST to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/sast-results.json
+          scan_type: "Semgrep JSON Report"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
+
+      - name: Upload SCA to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/sca-results.json
+          scan_type: "Trivy Scan"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
+
+      - name: Upload DAST to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/dast-results.json
+          scan_type: "ZAP Scan"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
