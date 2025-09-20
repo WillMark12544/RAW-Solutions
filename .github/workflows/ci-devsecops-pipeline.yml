@@ -32,7 +32,7 @@ jobs:
         run: dotnet test --no-build --verbosity normal
 
       - name: Build docker image
-        working-directory: Raw-Solutions-TEST-Web-App
+        working-directory: NotesSampleApplication
         run: docker build -t myapp:latest .
 
       - name: Save docker image
