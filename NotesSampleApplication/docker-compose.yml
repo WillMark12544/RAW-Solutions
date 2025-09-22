@@ -1,0 +1,41 @@
+﻿services:
+ database:
+  image: mcr.microsoft.com/mssql/server:2022-latest
+  container_name: notes_sql_server
+  environment:
+   ACCEPT_EULA: "Y"
+   SA_PASSWORD: ${SA_PASSWORD}
+  ports:
+   - "1433:1433"
+  networks:
+   - application_network
+  volumes:
+   - sqlserver_data:/var/opt/mssql
+  healthcheck:
+   start_period: 30s
+   retries: 10
+   interval: 10s
+   timeout: 5s
+   test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -U sa -P $${SA_PASSWORD} -Q 'SELECT 1'"]
+
+ webapp:
+  build:
+   context: .
+   dockerfile: Dockerfile
+  depends_on:
+   - database
+  container_name: notes_web_app
+  environment:
+    ConnectionStrings__DefaultConnection: "Server=database,1433;Database=NotesDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
+    ASPNETCORE_URLS: http://+:8080
+    ASPNETCORE_ENVIRONMENT: Development 
+  ports:
+   - "8080:8080"
+  networks:
+   - application_network
+
+networks:
+ application_network:
+
+volumes:
+ sqlserver_data:

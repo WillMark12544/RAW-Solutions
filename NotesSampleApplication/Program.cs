@@ -6,9 +6,15 @@ using NotesSampleApplication.Models;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using NotesSampleApplication.Services;
 using Microsoft.Extensions.FileProviders;
+using System.Linq.Expressions;
+using Microsoft.Data.SqlClient;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Make reader environment variables like .env for SA password
+builder.Configuration.AddEnvironmentVariables();
+
 
 // 1. Connect to database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -56,29 +62,58 @@ builder.Services.AddDataProtection()
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
-
-
 var app = builder.Build();
 
-// Seed roles
+
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    string[] roleNames = { "Normal", "Disabled", "Admin" };
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
 
-    foreach (var roleName in roleNames)
+// Error check to ensure roles do not try to seed before database has started
+var retries = 5;
+while (retries > 0)
+{
+    try
     {
-        if (!await roleManager.RoleExistsAsync(roleName))
+        // Seed roles
+        using (var scope = app.Services.CreateScope())
         {
-            await roleManager.CreateAsync(new IdentityRole(roleName));
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            string[] roleNames = { "Normal", "Disabled", "Admin" };
+
+            foreach (var roleName in roleNames)
+            {
+                if (!await roleManager.RoleExistsAsync(roleName))
+                {
+                    await roleManager.CreateAsync(new IdentityRole(roleName));
+                }
+            }
         }
+        break;
     }
+    catch (Exception ex)
+    {
+        retries--;
+        if (retries == 0) throw;
+        await Task.Delay(5000);
+    }
+}
+
+
+// check if upload directory exists
+var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+
+// create upload directory if does not exist
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
 }
 
 app.UseFileServer(new FileServerOptions
 {
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(Directory.GetCurrentDirectory(), "uploads")),
+    FileProvider = new PhysicalFileProvider(uploadsPath),
     RequestPath = "/uploads",
     EnableDirectoryBrowsing = true
 });
