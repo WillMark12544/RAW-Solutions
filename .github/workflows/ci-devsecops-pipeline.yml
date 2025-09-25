@@ -11,39 +11,85 @@ on:
 
 jobs:
   build:
-    name: Build Application
+    name: Build App
     runs-on: ubuntu-latest
+    env:
+      SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build project
-        run: dotnet build --no-restore
-
-      - name: Run tests
+      - name: Run UNIT and INTEGRATION TESTS
         run: dotnet test --no-build --verbosity normal
 
-      - name: Build docker image
-        working-directory: NotesSampleApplication
-        run: docker build -t myapp:latest .
+      - name: Build docker images with docker-compose.yml
+        run: docker compose build
 
-      - name: Save docker image
-        run: docker save myapp:latest -o myapp.tar
+      - name: Start Database and WebApp
+        run: docker compose up -d
+        
+      - name: Check WebApp is reachable
+        run: |
+          for i in {1..10}; do
+            if curl -fs http://localhost:8080 > /dev/null; then
+              echo "WebApp is reachable!"
+              exit 0
+            fi
+            echo "Waiting for the WebApp to respond..."
+            sleep 5
+            
+      - name: Save Docker image
+        run: docker save notes_web_app:latest -o myapp.tar
 
-      - name: Upload docker image as artifact
+      - name: Upload Docker image as artifact
         uses: actions/upload-artifact@v4
         with:
           name: myapp-image
           path: myapp.tar
           retention-days: 1
+
+  # build:
+  #   name: Build Application
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up .NET
+  #       uses: actions/setup-dotnet@v3
+  #       with:
+  #         dotnet-version: '8.0.x'
+
+  #     - name: Restore dependencies
+  #       run: dotnet restore
+
+  #     - name: Build project
+  #       run: dotnet build --no-restore
+
+  #     - name: Run tests
+  #       run: dotnet test --no-build --verbosity normal
+
+  #     - name: Build docker image
+  #       working-directory: NotesSampleApplication
+  #       run: docker build -t myapp:latest .
+
+  #     - name: Save docker image
+  #       run: docker save myapp:latest -o myapp.tar
+
+  #     - name: Upload docker image as artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: myapp-image
+  #         path: myapp.tar
+  #         retention-days: 1
 
   secret-scan:
     name: Secret Scan w/ Gitleaks
@@ -270,8 +316,8 @@ jobs:
       - name: Load docker image for DAST
         run: docker load -i myapp-image/myapp.tar
 
-      - name: Start application docker container from loaded image
-        run: docker run -d -p 8080:8080 --name myapp myapp:latest
+      - name: Start Database and WebApp
+        run: docker compose up -d
 
       - name: Wait for application to be ready
         run: |
