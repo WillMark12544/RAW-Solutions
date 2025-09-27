@@ -45,6 +45,9 @@ jobs:
             fi
             echo "Waiting for the WebApp to respond..."
             sleep 5
+          done
+          echo "WebApp is not reachable!"
+          exit 1
             
       - name: Save Docker image
         run: docker save notes_web_app:latest -o myapp.tar
