@@ -306,6 +306,8 @@ jobs:
       - sca
       - image-scan
       - secret-scan
+    env:
+      SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
