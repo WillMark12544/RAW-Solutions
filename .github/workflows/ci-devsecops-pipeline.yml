@@ -50,13 +50,13 @@ jobs:
           exit 1
             
       - name: Save Docker image
-        run: docker save notes_web_app:latest -o myapp.tar
+        run: docker save notes_web_app:latest -o notes_web_app.tar
 
       - name: Upload Docker image as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: myapp-image
-          path: myapp.tar
+          name: notes-webapp-image
+          path: notes_web_app.tar
           retention-days: 1
 
   # build:
@@ -133,16 +133,16 @@ jobs:
       - name: Download docker image for Image Scan
         uses: actions/download-artifact@v5
         with:
-          name: myapp-image
-          path: ./myapp-image
+          name: notes-webapp-image
+          path: ./notes-webapp-image
           
       - name: Load docker image for Image Scan
-        run: docker load -i myapp-image/myapp.tar
+        run: docker load -i notes-webapp-image/notes_web_app.tar
 
       - name: Run Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: myapp:latest
+          image-ref: notes_web_app:latest
           format: 'json'
           output: 'image-scan-results.json'
           severity: 'CRITICAL,HIGH'
@@ -313,11 +313,11 @@ jobs:
       - name: Download docker image for DAST
         uses: actions/download-artifact@v5
         with:
-          name: myapp-image
-          path: ./myapp-image
+          name: notes-webapp-image
+          path: ./notes-webapp-image
 
       - name: Load docker image for DAST
-        run: docker load -i myapp-image/myapp.tar
+        run: docker load -i notes-webapp-image/notes_web_app.tar
 
       - name: Start Database and WebApp
         run: docker compose -f NotesSampleApplication/docker-compose.yml up -d
@@ -334,13 +334,13 @@ jobs:
         with: 
           target: 'http://localhost:8080'
           allow_issue_writing: false
-          cmd_options: '-a'
+          cmd_options: '-a -J zap_scan.json'
           
       - name: Upload ZAP DAST as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dast-results
-          path: report.json
+          path: zap_scan.json
           retention-days: 1
 
   defectdojo-upload:
@@ -433,7 +433,7 @@ jobs:
       - name: Upload DAST to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/dast-results.json
+          file: results/zap_scan.json
           scan_type: "ZAP Scan"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
