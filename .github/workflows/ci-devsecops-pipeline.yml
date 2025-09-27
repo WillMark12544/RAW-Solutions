@@ -322,12 +322,18 @@ jobs:
       - name: Start Database and WebApp
         run: docker compose -f NotesSampleApplication/docker-compose.yml up -d
 
-      - name: Wait for application to be ready
+      - name: Check WebApp is reachable
         run: |
-          until curl -sf http://localhost:8080; do
-            echo "Waiting for application be ready..."
-            sleep 3
+          for i in {1..10}; do
+            if curl -fs http://localhost:8080 > /dev/null; then
+              echo "WebApp is reachable!"
+              exit 0
+            fi
+            echo "Waiting for the WebApp to respond..."
+            sleep 5
           done
+          echo "WebApp is not reachable!"
+          exit 1
 
       - name: Run baseline OWASP ZAP scan
         uses: zaproxy/action-baseline@v0.14.0
