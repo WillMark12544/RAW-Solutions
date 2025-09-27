@@ -342,13 +342,14 @@ jobs:
         with: 
           target: 'http://localhost:8080'
           allow_issue_writing: false
-          cmd_options: '-a -J zap_scan.json'
+          cmd_options: '-a'
+          artifact_name: 'dast-results'
           
       - name: Upload ZAP DAST as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dast-results
-          path: zap_scan.json
+          path: dast-results.json
           retention-days: 1
 
   defectdojo-upload:
@@ -441,7 +442,7 @@ jobs:
       - name: Upload DAST to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/zap_scan.json
+          file: results/dast-results.json
           scan_type: "ZAP Scan"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
