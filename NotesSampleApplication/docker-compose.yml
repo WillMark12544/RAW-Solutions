@@ -22,6 +22,7 @@
   build:
    context: .
    dockerfile: Dockerfile
+  image: notes_web_app:latest
   depends_on:
    - database
   container_name: notes_web_app
