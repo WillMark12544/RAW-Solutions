@@ -346,7 +346,6 @@ jobs:
           -v ${{ github.workspace}}:/zap/wrk/:rw \
           -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
           -t http://localhost:8080 \
-          -g gen.conf \
           -x /zap/wrk/dast-results.xml
           
       
