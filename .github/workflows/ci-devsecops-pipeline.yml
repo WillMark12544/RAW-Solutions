@@ -342,7 +342,7 @@ jobs:
         with: 
           target: 'http://localhost:8080'
           allow_issue_writing: false
-          cmd_options: '-a'
+          cmd_options: '-a -J dast-results.json'
           artifact_name: 'dast-results'
           
       - name: Upload ZAP DAST as artifact
