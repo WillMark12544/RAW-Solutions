@@ -343,14 +343,13 @@ jobs:
           target: 'http://localhost:8080'
           allow_issue_writing: false
           cmd_options: '-a'
-          artifact_name: ''
           
-      - name: Upload ZAP DAST as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dast-results
-          path: report_json.json
-          retention-days: 1
+      # - name: Upload ZAP DAST as artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dast-results
+      #     path: report_json.json
+      #     retention-days: 1
 
   defectdojo-upload:
     name: Upload scans to local DefectDojo instance
@@ -392,7 +391,7 @@ jobs:
       - name: Download DAST Artifact 
         uses: actions/download-artifact@v5
         with:
-          name: dast-results
+          name: zap_scan
           path: ./results
 
       - name: Upload Image Scan to DefectDojo
