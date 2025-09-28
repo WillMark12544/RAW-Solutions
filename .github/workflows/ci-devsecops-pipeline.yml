@@ -343,7 +343,6 @@ jobs:
           target: 'http://localhost:8080'
           allow_issue_writing: false
           cmd_options: '-a'
-          artifact_name: 'dast-results'
           
       - name: Upload ZAP DAST as artifact
         uses: actions/upload-artifact@v4
