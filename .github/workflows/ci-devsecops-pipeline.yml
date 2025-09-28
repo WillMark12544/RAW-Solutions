@@ -337,19 +337,32 @@ jobs:
           echo "WebApp is not reachable!"
           exit 1
 
-      - name: Run baseline OWASP ZAP scan
-        uses: zaproxy/action-baseline@v0.14.0
-        with: 
-          target: 'http://localhost:8080'
-          allow_issue_writing: false
-          cmd_options: '-a'
+      - name: Pull OWASP ZAP Docker image
+        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+
+      - name: Run Full ZAP Scan on Notes application
+        run: |
+          docker run \
+          -v ${{ github.workspace}}:/zap/wrk/:rw \
+          -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+          -t http://localhost:8080 \
+          -g gen.conf \
+          -x /zap/wrk/dast-results.xml
           
-      # - name: Upload ZAP DAST as artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: dast-results
-      #     path: report_json.json
-      #     retention-days: 1
+      
+      # - name: Run baseline OWASP ZAP scan
+      #   uses: zaproxy/action-baseline@v0.14.0
+      #   with: 
+      #     target: 'http://localhost:8080'
+      #     allow_issue_writing: false
+      #     cmd_options: '-a'
+          
+      - name: Upload ZAP DAST as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-results
+          path: dast-results.xml
+          retention-days: 1
 
   defectdojo-upload:
     name: Upload scans to local DefectDojo instance
@@ -391,7 +404,7 @@ jobs:
       - name: Download DAST Artifact 
         uses: actions/download-artifact@v5
         with:
-          name: zap_scan
+          name: dast-results
           path: ./results
 
       - name: Upload Image Scan to DefectDojo
@@ -441,7 +454,7 @@ jobs:
       - name: Upload DAST to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/report_json.json
+          file: results/dast-results.xml
           scan_type: "ZAP Scan"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
