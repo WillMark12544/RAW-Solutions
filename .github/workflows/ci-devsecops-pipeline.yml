@@ -343,9 +343,10 @@ jobs:
       - name: Run Full ZAP Scan on Notes application
         run: |
           docker run \
+          --add-host=host.docker.internal:host-gateway \
           -v ${{ github.workspace}}:/zap/wrk/:rw \
           -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-          -t http://localhost:8080 \
+          -t http://host.docker.internal:8080 \
           -x /zap/wrk/dast-results.xml
           
       
