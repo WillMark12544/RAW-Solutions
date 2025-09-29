@@ -344,7 +344,7 @@ jobs:
         run: |
           docker run \
           --add-host=host.docker.internal:host-gateway \
-          -v ${{ github.workspace}}:/zap/wrk/:rw \
+          -v ${{ github.workspace }}:/zap/wrk/:rw \
           -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
           -t http://host.docker.internal:8080 \
           -x /zap/wrk/dast-results.xml
@@ -361,7 +361,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dast-results
-          path: dast-results.xml
+          path: ${{ github.workspace }}/dast-results.xml
           retention-days: 1
 
   defectdojo-upload:
