@@ -348,9 +348,9 @@ jobs:
           -v ${{ github.workspace }}:/zap/wrk/:rw \
           -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
           -t http://host.docker.internal:8080 \
-          -x /zap/wrk/dast-results.xml
-          
-      
+          -x /zap/wrk/dast-results.xml \
+          -I 
+        
       # - name: Run baseline OWASP ZAP scan
       #   uses: zaproxy/action-baseline@v0.14.0
       #   with: 
