@@ -112,7 +112,6 @@ public class NotesController : Controller
 
                 if (existingNote == null) return NotFound();
 
-                // Update allowed fields
                 existingNote.Title = note.Title;
                 existingNote.Content = note.Content;
 

@@ -20,7 +20,7 @@ namespace NotesApp.Controllers
             _roleManager = roleManager;
         }
 
-        // We use a View Model to pass more structured data to the view
+        // View Model to pass more structured data to the view
         public class UserViewModel
         {
             public string Id { get; set; }
@@ -51,8 +51,8 @@ namespace NotesApp.Controllers
             return View(usersWithRoles);
         }
 
-        [HttpPost] // We only accept POST requests for this action
-        [ValidateAntiForgeryToken] // Optional but recommended for security
+        [HttpPost] 
+        [ValidateAntiForgeryToken] // Security add
         public async Task<IActionResult> ChangeRole(string userId, string newRole)
         {
             var user = await _userManager.FindByIdAsync(userId);
