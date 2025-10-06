@@ -1,0 +1,44 @@
+env:
+  target: "http://host.docker.internal:8080"
+
+contexts:
+  - name: "notes-context"
+    urls:
+      - "{target}"
+    sessionManagement:
+      method: "cookie"
+    authentication:
+      method: "formBased"
+      parameters:
+        loginUrl: "{target}/Account/Login"
+        loginPageUrl: "{target}/Account/Login"
+        loginRequestData: "Input.Email={%username%}&Input.Password={%password%}&__RequestVerificationToken={%token%}"
+      verification:
+        loggedInRegex: "Logout"
+        loggedOutRegex: "Login"
+    users:
+      - name: "zap-user"
+        credentials: 
+          username: "${ZAP_USERNAME}"
+          password: "${ZAP_PASSWORD}"
+
+jobs: 
+  - type: "spider"
+    parameters:
+      context: "notes-context"
+      user: "zap-user"
+      url: "{target}"
+      maxDuration: 5
+      
+  - type: "activeScan"
+    parameters:
+      context: "notes-context"
+      user: "zap-user"
+      url: "{target}"
+
+  - type: "report"
+    parameters:
+      template: "traditional-xml"
+      reportFile: "/zap/wrk/dast-results.xml"
+      reportTitle: "ZAP DAST Authenticated"
+      
