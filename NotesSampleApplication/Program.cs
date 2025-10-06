@@ -101,6 +101,32 @@ while (retries > 0)
     }
 }
 
+// Seed test users VULNERABILITY 
+using (var scope = app.Services.CreateScope())
+{
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+    // INTENTIONAL VULNERABILITY: Hardcoded credentials in source code
+    // Default admin password: AdminPassword123!
+    string adminPassword = "AdminPassword123!";
+    string adminEmail = "admin@example.com";
+
+    // Seed Admin User
+    var adminUser = await userManager.FindByEmailAsync(adminEmail);
+    if (adminUser == null)
+    {
+        adminUser = new ApplicationUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            EmailConfirmed = true
+        };
+        await userManager.CreateAsync(adminUser, adminPassword);
+        await userManager.AddToRoleAsync(adminUser, "Admin");
+    }
+}
+
 
 // check if upload directory exists
 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");

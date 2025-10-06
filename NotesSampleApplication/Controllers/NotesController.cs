@@ -63,18 +63,16 @@ public class NotesController : Controller
         return View(notes);
     }
 
-    // Intentional Vulnerability - SQL Injection 
+    // Intentional Vulnerability - SQL Injection
     public async Task<IActionResult> Search(string searchTerm)
     {
-
         var userId = _userManager.GetUserId(User);
-
-        var sql = $"SELECT * FROM Notes WHERE UserId = '{userId}' AND Title LIKE '%{searchTerm}%'";
-
+        var sql = "SELECT * FROM Notes WHERE UserId = '" + userId + "' AND Title LIKE '" + searchTerm + "'";
         var notes = await _context.Notes.FromSqlRaw(sql).ToListAsync();
-
         return View("Index", notes);
     }
+
+
 
 
     // GET: Notes/Edit/5

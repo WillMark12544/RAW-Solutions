@@ -34,8 +34,8 @@
         @foreach (var note in Model)
         {
             <tr>
-                <td>@note.Title</td>
-                <td>@note.Content</td>
+                <td>@Html.Raw(note.Title)</td>
+                <td>@Html.Raw(note.Content)</td>
                 <td>@note.CreatedAt.ToString("g")</td>
                 <td>
                     <a asp-action="Edit" asp-route-id="@note.Id" class="btn btn-sm btn-warning">Edit</a>
