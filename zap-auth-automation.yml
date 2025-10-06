@@ -1,5 +1,6 @@
 env:
-  target: "http://host.docker.internal:8080"
+  parameters:
+    target: "http://host.docker.internal:8080"
   contexts:
     - name: "notes-context"
       urls:
@@ -13,7 +14,6 @@ env:
           loginPageUrl: "${target}/Account/Login"
           loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
         verification:
-          method: "regex"
           loggedInRegex: "Logout"
           loggedOutRegex: "Login"
       users:
