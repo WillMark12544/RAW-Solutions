@@ -104,12 +104,12 @@ while (retries > 0)
 // Seed test users VULNERABILITY 
 using (var scope = app.Services.CreateScope())
 {
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
     // INTENTIONAL VULNERABILITY: Hardcoded credentials in source code
     // Default admin password: 06g073rocnMVAuvQ0ZrovFMG8d237O
-    string adminPassword = "06g073rocnMVAuvQ0ZrovFMG8d237O";
+    string adminPassword = "06g073rocnMVAuvQ0ZrovFMG8d237O!";
     string adminEmail = "admin@example.com";
 
     // Seed Admin User
