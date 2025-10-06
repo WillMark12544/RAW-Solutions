@@ -185,6 +185,8 @@ jobs:
       - secret-scan
     env:
       SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+      ZAP_USERNAME: ${{ secrets.ZAP_USERNAME }}
+      ZAP_PASSWORD: ${{ secrets.ZAP_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -217,16 +219,15 @@ jobs:
       - name: Pull OWASP ZAP Docker image
         run: docker pull ghcr.io/zaproxy/zaproxy:stable
 
-      - name: Run Full ZAP Scan on Notes application
+      - name: Run Authenticated ZAP Automation Framework 
         run: |
           docker run \
-          --user root \
           --add-host=host.docker.internal:host-gateway \
+          -e ZAP_USERNAME="${ZAP_USERNAME}" \
+          -e ZAP_PASSWORD="${ZAP_PASSWORD}" \
           -v ${{ github.workspace }}:/zap/wrk/:rw \
-          -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-          -t http://host.docker.internal:8080 \
-          -x /zap/wrk/dast-results.xml \
-          -I 
+          -t ghcr.io/zaproxy/zaproxy:stable \
+          zap.sh -cmd -autorun /zap/wrk/zap-auth-automation.yml
         
       - name: Upload ZAP DAST as artifact
         uses: actions/upload-artifact@v4
