@@ -3,16 +3,17 @@ env:
   contexts:
     - name: "notes-context"
       urls:
-        - "{target}"
+        - "${target}"
       sessionManagement:
         method: "cookie"
       authentication:
         method: "form"
         parameters:
-          loginUrl: "{target}/Account/Login"
-          loginPageUrl: "{target}/Account/Login"
+          loginUrl: "${target}/Account/Login"
+          loginPageUrl: "${target}/Account/Login"
           loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
         verification:
+          method: "regex"
           loggedInRegex: "Logout"
           loggedOutRegex: "Login"
       users:
@@ -26,14 +27,14 @@ jobs:
     parameters:
       context: "notes-context"
       user: "zap-user"
-      url: "{target}"
+      url: "${target}"
       maxDuration: 5
       
   - type: "activeScan"
     parameters:
       context: "notes-context"
       user: "zap-user"
-      url: "{target}"
+      url: "${target}"
 
   - type: "report"
     parameters:
