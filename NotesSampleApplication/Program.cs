@@ -108,8 +108,8 @@ using (var scope = app.Services.CreateScope())
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
     // INTENTIONAL VULNERABILITY: Hardcoded credentials in source code
-    // Default admin password: AdminPassword123!
-    string adminPassword = "AdminPassword123!";
+    // Default admin password: 06g073rocnMVAuvQ0ZrovFMG8d237O
+    string adminPassword = "06g073rocnMVAuvQ0ZrovFMG8d237O";
     string adminEmail = "admin@example.com";
 
     // Seed Admin User
@@ -126,6 +126,11 @@ using (var scope = app.Services.CreateScope())
         await userManager.AddToRoleAsync(adminUser, "Admin");
     }
 }
+
+// INTENTIONAL VULNERABILITY: Hardcoded API credentials for security testing
+var awsAccessKey = "AKJAIOSFODNN7EXAMPLE";
+var awsSecretKey = "wJalrXUtnFRMI/K7MDENG/bPxRhiCYEXAMPLEKEY";
+var stripeApiKey = "sk_live_51HqJ8dKZvKYlo2C8a1k2c3d4e5f6g7h8i9j0r1l2m3n4o5p6q7r8s9t0u1v2n3x4y5z6";
 
 
 // check if upload directory exists
