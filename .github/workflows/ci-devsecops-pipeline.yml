@@ -28,7 +28,7 @@ jobs:
         run: dotnet restore
 
       - name: Run UNIT and INTEGRATION TESTS
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test NotesSampleApplication.Tests/NotesSampleApplication.Tests.csproj --verbosity normal
 
       - name: Build docker images with docker-compose.yml
         run: docker compose -f NotesSampleApplication/docker-compose.yml build
