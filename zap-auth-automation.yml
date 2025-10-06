@@ -11,7 +11,6 @@ env:
         method: "form"
         parameters:
           loginUrl: "${target}/Account/Login"
-          loginPageUrl: "${target}/Account/Login"
           loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
         verification:
           loggedInRegex: "Logout"
