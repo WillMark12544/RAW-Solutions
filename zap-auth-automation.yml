@@ -1,25 +1,27 @@
 env:
-  parameters:
+  vars:
     target: "http://host.docker.internal:8080"
-  contexts:
-    - name: "notes-context"
-      urls:
-        - "${target}"
-      sessionManagement:
-        method: "cookie"
-      authentication:
-        method: "form"
-        parameters:
-          loginUrl: "${target}/Account/Login"
-          loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
-        verification:
-          loggedInRegex: "Logout"
-          loggedOutRegex: "Login"
-      users:
-        - name: "zap-user"
-          credentials: 
-            username: "${ZAP_USERNAME}"
-            password: "${ZAP_PASSWORD}"
+
+contexts:
+  - name: "notes-context"
+    urls:
+      - "${target}"
+    sessionManagement:
+      method: "cookie"
+    authentication:
+      method: "form"
+      parameters:
+        loginUrl: "${target}/Account/Login"
+        loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
+      verification:
+        method: "regex"
+        loggedInRegex: "Logout"
+        loggedOutRegex: "Login"
+    users:
+      - name: "zap-user"
+        credentials: 
+          username: "${ZAP_USERNAME}"
+          password: "${ZAP_PASSWORD}"
             
 jobs: 
   - type: "spider"
