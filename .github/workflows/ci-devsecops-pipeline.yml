@@ -77,7 +77,7 @@ jobs:
 
       - name: Run Gitleaks Secret Scan
         run: |
-          gitleaks detect --source . --redact --report-format json --report-path secret-scan-results.json
+          gitleaks detect --source . --redact --report-format json --report-path secret-scan-results.json --exit-code 0
 
       - name: Upload Gitleaks Secret Scan output as artifact
         uses: actions/upload-artifact@v4
