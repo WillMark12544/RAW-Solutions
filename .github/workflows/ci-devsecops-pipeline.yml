@@ -222,6 +222,7 @@ jobs:
       - name: Run Authenticated ZAP Automation Framework 
         run: |
           docker run \
+          --user root \
           --add-host=host.docker.internal:host-gateway \
           -e ZAP_USERNAME="${ZAP_USERNAME}" \
           -e ZAP_PASSWORD="${ZAP_PASSWORD}" \
