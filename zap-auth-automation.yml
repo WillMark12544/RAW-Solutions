@@ -13,7 +13,7 @@ env:
           loginUrl: "${target}/Account/Login"
           loginRequestData: "Input.Email={%username%}&Input.Password={%password%}"
         verification:
-          method: "regex"
+          method: "response"
           loggedInRegex: "Logout"
           loggedOutRegex: "Login"
       users:
@@ -23,6 +23,11 @@ env:
             password: "${ZAP_PASSWORD}"
             
 jobs: 
+  - type: "login"
+    parametres:
+      context: "notes-context"
+      user: "zap-user"
+
   - type: "spider"
     parameters:
       context: "notes-context"
