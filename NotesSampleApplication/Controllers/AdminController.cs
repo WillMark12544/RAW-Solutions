@@ -52,7 +52,6 @@ namespace NotesApp.Controllers
         }
 
         [HttpPost] 
-        [ValidateAntiForgeryToken] // Security add
         public async Task<IActionResult> ChangeRole(string userId, string newRole)
         {
             var user = await _userManager.FindByIdAsync(userId);

@@ -28,7 +28,6 @@ public class NotesController : Controller
 
     // POST: Notes/Create
     [HttpPost]
-    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(Note note) // <-- removed Bind
     {
         if (!ModelState.IsValid)
@@ -92,7 +91,6 @@ public class NotesController : Controller
 
     // POST: Notes/Edit/5
     [HttpPost]
-    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, Note note)
     {
         if (id != note.Id) return NotFound();
@@ -145,7 +143,6 @@ public class NotesController : Controller
 
     // POST: Notes/Delete/5
     [HttpPost, ActionName("Delete")]
-    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
         var note = await _context.Notes.FindAsync(id);
