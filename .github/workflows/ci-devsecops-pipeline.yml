@@ -135,10 +135,13 @@ jobs:
       - name: Run Semgrep SAST
         run: |
           semgrep \
+          --config p/default \
           --config p/owasp-top-ten \
           --config p/security-audit \
           --config p/csharp \
+          --config p/security-code-scan \
           --config p/insecure-transport \
+          --dataflow-traces \
           --json \
           --output sast-results.json
 
