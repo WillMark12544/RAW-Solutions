@@ -62,33 +62,14 @@ public class NotesController : Controller
         return View(notes);
     }
 
-    // Intentional Vulnerability - SQL Injection AND Reflected XSS
+    // Intentional Vulnerability - SQL Injection
     public async Task<IActionResult> Search(string searchTerm)
     {
         var userId = _userManager.GetUserId(User);
-
-        // INTENTIONAL VULNERABILITY: Reflected XSS 
-        if (!string.IsNullOrEmpty(searchTerm))
-        {
-            ViewBag.SearchMessage = "You searched for: " + searchTerm;
-        }
-
-        // INTENTIONAL VULNERABILITY: SQL Injection
-        var sql = "SELECT * FROM Notes WHERE UserId = '" + userId + "' OR Title LIKE '%" + searchTerm + "%'";
-
-        try
-        {
-            var notes = await _context.Notes.FromSqlRaw(sql).ToListAsync();
-            return View("Index", notes);
-        }
-        catch
-        {
-            var notes = new List<Note>();
-            return View("Index", notes);
-        }
+        var sql = "SELECT * FROM Notes WHERE UserId = '" + userId + "' AND Title LIKE '" + searchTerm + "'";
+        var notes = await _context.Notes.FromSqlRaw(sql).ToListAsync();
+        return View("Index", notes);
     }
-
-
 
 
     // GET: Notes/Edit/5
@@ -164,7 +145,6 @@ public class NotesController : Controller
     {
         var note = await _context.Notes.FindAsync(id);
         var user = await _userManager.GetUserAsync(User);
-        if (note.UserId != user.Id) return Unauthorized();
 
         _context.Notes.Remove(note);
         await _context.SaveChangesAsync();
