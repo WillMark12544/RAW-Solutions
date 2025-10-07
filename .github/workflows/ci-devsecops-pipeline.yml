@@ -356,7 +356,7 @@ jobs:
       - name: Upload SAST-2 CSHARP to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/sast-2-results/csharp.sarif
+          file: results/csharp.sarif
           scan_type: "SARIF"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
@@ -367,7 +367,7 @@ jobs:
       - name: Upload SAST-2 JAVASCRIPT to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/sast-2-results/javascript.sarif
+          file: results/javascript.sarif
           scan_type: "SARIF"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
