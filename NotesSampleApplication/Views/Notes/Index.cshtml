@@ -6,6 +6,13 @@
 
 <h1>My Notes</h1>
 
+@if (ViewBag.SearchMessage != null)
+{
+    <div class="alert alert-info">
+        @Html.Raw(ViewBag.SearchMessage)
+    </div>
+}
+
 <p>
     <a asp-action="Create" class="btn btn-primary">Create New Note</a>
 </p>
