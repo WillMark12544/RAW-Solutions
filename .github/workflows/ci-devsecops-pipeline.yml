@@ -177,13 +177,13 @@ jobs:
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          output: sast-2-results.sarif
+          output: sast-2-results
 
       - name: Upload CodeQL SAST output as artifact
         uses: actions/upload-artifact@v4
         with:
           name: sast-2-results
-          path: sast-2-results.sarif
+          path: sast-2-results/*sarif
           retention-days: 1
 
   sca:
@@ -353,10 +353,21 @@ jobs:
           master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
           development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
 
-      - name: Upload SAST-2 to DefectDojo
+      - name: Upload SAST-2 CSHARP to DefectDojo
         uses: ./.github/actions/defectdojo-upload
         with:
-          file: results/sast-2-results.sarif
+          file: results/sast-2-results/csharp.sarif
+          scan_type: "SARIF"
+          branch_name: ${{ github.ref_name }}
+          defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
+          defectdojo_api_key: ${{ secrets.DEFECTDOJO_API_KEY }}
+          master_engagement_id: ${{ secrets.MASTER_ENGAGEMENT_ID }}
+          development_engagement_id: ${{ secrets.DEVELOPMENT_ENGAGEMENT_ID }}
+
+      - name: Upload SAST-2 JAVASCRIPT to DefectDojo
+        uses: ./.github/actions/defectdojo-upload
+        with:
+          file: results/sast-2-results/javascript.sarif
           scan_type: "SARIF"
           branch_name: ${{ github.ref_name }}
           defectdojo_host: ${{ secrets.DEFECTDOJO_HOST }}
