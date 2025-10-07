@@ -22,12 +22,7 @@ env:
             username: "${ZAP_USERNAME}"
             password: "${ZAP_PASSWORD}"
             
-jobs: 
-  - type: "login"
-    parametres:
-      context: "notes-context"
-      user: "zap-user"
-
+jobs:
   - type: "spider"
     parameters:
       context: "notes-context"
