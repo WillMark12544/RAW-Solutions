@@ -217,6 +217,7 @@ jobs:
     needs:
       - build
       - sast
+      - sast-2
       - sca
       - image-scan
       - secret-scan
@@ -278,10 +279,6 @@ jobs:
     name: Upload scans to local DefectDojo instance
     runs-on: self-hosted
     needs:
-      - sast
-      - sca
-      - image-scan
-      - secret-scan
       - dast
     steps:
       - name: Checkout repository
