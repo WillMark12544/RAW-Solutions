@@ -5,7 +5,7 @@ on:
     workflows: ["CI DevSecOps Pipeline"]
     types: [completed]
     branches: [master]    # or master
-  workflow_dispatch: {} # allow manual runs
+  workflow_dispatch: {} # allow manual runs 
 
 jobs:
   deploy:
