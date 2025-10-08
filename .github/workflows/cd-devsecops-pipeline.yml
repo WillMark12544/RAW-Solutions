@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["CI DevSecOps Pipeline"]   # ✅ Must match your CI workflow name exactly
     types: [completed]
-    branches: [master, main]                     # ✅ or 'main' if that’s your default branch
+    branches: [master]                     # ✅ or 'main' if that’s your default branch
 
 jobs:
   deploy:
