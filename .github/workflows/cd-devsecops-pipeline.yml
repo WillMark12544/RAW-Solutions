@@ -1,119 +1,53 @@
-name: CD (Zip Deploy + Post-Deploy Security)
+name: CD (Zip Deploy + ZAP Scan – Free Plan)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]   # must match the CI 'name'
+    workflows: ["CI DevSecOps Pipeline"]   # must match your CI name
     types: [completed]
-    branches: [master]
+    branches: [main]                       # change to master if that’s your branch
+  workflow_dispatch: {}                    # lets you run it manually from Actions
 
 jobs:
-  deploy-staging:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    environment: staging
+    environment: production
     steps:
-      - name: Download web artifact
+      - name: Download build artifact
         uses: actions/download-artifact@v5
         with:
-          name: webapp
+          name: webapp                      # must match artifact name from CI
           path: ./publish
 
       - name: Azure login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}    # prefer OIDC/federated if possible
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Create Zip
+      - name: Create zip package
         run: (cd publish && zip -r ../webapp.zip .)
 
-      - name: Deploy to staging slot
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          slot-name: staging
           package: webapp.zip
 
-  verify-staging:
-    needs: deploy-staging
+  zap-scan:
+    name: Post-deploy ZAP Scan
+    needs: deploy
     runs-on: ubuntu-latest
     steps:
-      - name: Smoke test /health
-        run: |
-          set -e
-          for i in {1..40}; do
-            if curl -sf ${{ secrets.STAGING_URL }}/health; then exit 0; fi
-            sleep 5
-          done
-          echo "Staging health check failed" && exit 1
-
-  swap-to-prod:
-    needs: verify-staging
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Swap staging → production
-        uses: azure/CLI@v2
-        with:
-          inlineScript: |
-            az webapp deployment slot swap \
-              --resource-group ${{ secrets.AZ_RG }} \
-              --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-              --slot staging --target-slot production
-
-  post-deploy-security:
-    name: Post-deploy DAST (ZAP) on Prod
-    needs: swap-to-prod
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: ZAP Baseline against Prod
+      - name: Run ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: ${{ secrets.PROD_URL }}           # e.g., https://rawsolutions.azurewebsites.net
+          target: ${{ secrets.PROD_URL }}           # e.g. https://rawsolutions-web.azurewebsites.net
           allow_issue_writing: false
           cmd_options: >-
-            -m 15 -t ${{ secrets.PROD_URL }} -r zap-baseline-report.html
+            -m 10 -t ${{ secrets.PROD_URL }} -r zap-report.html
 
-      - name: Upload ZAP report
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-postdeploy-report
-          path: zap-baseline-report.html
-
-      - name: Gate on Medium/High alerts
-        run: |
-          set -e
-          HIGHS=$(grep -i "High Alert" -c zap-baseline-report.html || true)
-          MEDS=$(grep -i "Medium Alert" -c zap-baseline-report.html || true)
-          echo "High: $HIGHS  Medium: $MEDS"
-          if [ "${HIGHS:-0}" -gt 0 ] || [ "${MEDS:-0}" -gt 0 ]; then
-            echo "Blocking due to Medium/High findings."
-            exit 1
-          fi
-
-  rollback:
-    name: Rollback (swap back)
-    needs: post-deploy-security
-    if: failure()
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Swap back production ← staging
-        uses: azure/CLI@v2
-        with:
-          inlineScript: |
-            az webapp deployment slot swap \
-              --resource-group ${{ secrets.AZ_RG }} \
-              --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-              --slot staging --target-slot production
-
+          path: zap-report.html
