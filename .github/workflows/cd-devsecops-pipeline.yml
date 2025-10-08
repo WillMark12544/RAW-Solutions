@@ -16,8 +16,8 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v5
         with:
-          name: webapp                      # must match artifact name from CI
-          path: ./publish
+          name: notes-webapp-image                    # must match artifact name from CI
+          path: ./notes-webapp-image
 
       - name: Azure login
         uses: azure/login@v2
@@ -41,7 +41,7 @@ jobs:
       - name: Run ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: ${{ secrets.PROD_URL }}           # e.g. https://rawsolutions-web.azurewebsites.net
+          target: ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}           # e.g. https://rawsolutions-web.azurewebsites.net
           allow_issue_writing: false
           cmd_options: >-
             -m 10 -t ${{ secrets.PROD_URL }} -r zap-report.html
