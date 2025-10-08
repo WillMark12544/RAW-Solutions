@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["CI DevSecOps Pipeline"]   # must match your CI name
     types: [completed]
-    branches: [main]                       # change to master if that’s your branch
+    branches: [master]                       # change to master if that’s your branch
   workflow_dispatch: {}                    # lets you run it manually from Actions
 
 jobs:
