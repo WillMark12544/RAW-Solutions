@@ -1,10 +1,52 @@
-name: CD DevSecOps Pipeline
+name: CD (Zip Deploy + Post-Deploy ZAP Scan - Free Plan)
 
 on:
-  # push:
-  #   branches:
-  #     - "master"
-  # pull_request:
-  #   branches:
-  #     - "master"
-  workflow_dispatch: {}
+  workflow_run:
+    workflows: ["CI DevSecOps Pipeline"]   # ✅ Must match your CI workflow name exactly
+    types: [completed]
+    branches: [master, main]                     # ✅ or 'main' if that’s your default branch
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: notes-webapp-image                    # ✅ Must match artifact name from CI
+          path: ./notes-webapp-image
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}   # ✅ Added via GitHub secrets
+
+      - name: Create zip package
+        run: (cd publish && zip -r ../webapp.zip .)
+
+      - name: Deploy to Azure Web App (Free Plan)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.rawsolutions_group }}  # ✅ Example: rawsolutions-web
+          package: webapp.zip
+
+  zap-scan:
+    name: Post-deploy ZAP Scan
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}            # ✅ Example: https://rawsolutions-web.azurewebsites.net/
+          allow_issue_writing: false
+          cmd_options: >-
+            --m 10 -t ${{ secrets.PROD_URL }} -r zap-report.html
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-postdeploy-report
+          path: zap-report.html
