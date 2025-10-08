@@ -5,6 +5,7 @@ on:
     workflows: ["CI DevSecOps Pipeline"]   # must match the CI 'name'
     types: [completed]
     branches: [master]
+  workflow_dispatch: {}
 
 jobs:
   deploy-staging:
