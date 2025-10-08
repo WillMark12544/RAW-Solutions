@@ -1,53 +1,61 @@
-name: CD (Zip Deploy + ZAP Scan – Free Plan)
+name: CD (Docker Deploy + ZAP Scan)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]   # must match your CI name
+    workflows: ["CI DevSecOps Pipeline"]
     types: [completed]
-    branches: [master]                       # change to master if that’s your branch
-  workflow_dispatch: {}                    # lets you run it manually from Actions
+    branches: [master]    # or master
+  workflow_dispatch: {} # allow manual runs
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: Download build artifact
+      - name: Download Docker Image Artifact
         uses: actions/download-artifact@v5
         with:
-          name: notes-webapp-image                    # must match artifact name from CI
+          name: notes-webapp-image
           path: ./notes-webapp-image
 
-      - name: Azure login
+      - name: Load Docker Image
+        run: docker load -i notes-webapp-image/notes_web_app.tar
+
+      - name: Tag Image for ACR
+        run: docker tag notes_web_app:latest ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest
+
+      - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Create zip package
-        run: (cd publish && zip -r ../webapp.zip .)
+      - name: ACR Login
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          package: webapp.zip
+      - name: Push Image to ACR
+        run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest
+
+      - name: Configure Web App to use latest image
+        run: |
+          az webapp config container set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZ_RG }} \
+            --docker-custom-image-name ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest \
+            --docker-registry-server-url https://${{ secrets.ACR_LOGIN_SERVER }}
 
   zap-scan:
-    name: Post-deploy ZAP Scan
     needs: deploy
     runs-on: ubuntu-latest
     steps:
-      - name: Run ZAP Baseline Scan
+      - name: Run ZAP Baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}           # e.g. https://rawsolutions-web.azurewebsites.net
-          allow_issue_writing: false
+          target: ${{ secrets.PROD_URL }}
           cmd_options: >-
-            -m 10 -t ${{ secrets.PROD_URL }} -r zap-report.html
+            -m 10 -t ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }} -r zap-report.html
 
-      - name: Upload ZAP Report
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-postdeploy-report
+          name: zap-report
           path: zap-report.html
