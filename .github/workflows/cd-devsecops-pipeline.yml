@@ -1,58 +1,39 @@
-name: CD (Deploy Docker Artifact to Azure)
+name: CD (Deploy Docker Image to Azure)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]
+    workflows: ["CI DevSecOps Pipeline"]   # must match CI 'name'
     types: [completed]
     branches: [master]
-  workflow_dispatch: {}
+  workflow_dispatch: {}                    # manual trigger for testing
 
 jobs:
   deploy-to-azure:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
-      actions: read   # ✅ allows API download of artifacts
-
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Debug:list artifacts in the triggering CI run 
-        run: |
-          echo "CI run ID: ${{ github.event.workflow_run.id }}"
-          curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
-          | jq '.artifacts[].name' || echo "No artifacts found!"
 
       - name: Download Docker image artifact from CI run
+        uses: actions/download-artifact@v5
+        with:
+          name: notes-webapp-image
+          path: ./notes-webapp-image
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify artifact contents
         run: |
-          echo "Fetching artifact from CI run ID: ${{ github.event.workflow_run.id }}"
-          curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
-          | jq -r '.artifacts[] | select(.name | contains("notes-webapp-image")) | .archive_download_url' > url.txt
-
-          ARTIFACT_URL=$(cat url.txt)
-          if [ -z "$ARTIFACT_URL" ]; then
-            echo "❌ Artifact not found in this run. Check artifact names above."
-            exit 1
-          fi
-
-          echo "✅ Found artifact URL, downloading..."
-          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o artifact.zip "$ARTIFACT_URL"
-          mkdir -p ./image
-          unzip -q artifact.zip -d ./image
-
+          echo "📦 Listing artifact files:"
+          ls -R ./notes-webapp-image
 
       - name: Load Docker image
-        run: docker load -i ./image/notes_web_app.tar
+        run: docker load -i ./notes-webapp-image/notes_web_app.tar
 
-      - name: Tag Docker image
+      - name: Tag Docker image for release
         run: docker tag notes_web_app:latest notes_web_app:release
 
       - name: Azure Login
@@ -60,22 +41,24 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy image to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.rawsolutions }}
+          app-name: ${{ secrets.rawsolutions }}   # e.g., rawsolutions
           images: notes_web_app:release
 
       - name: Restart Web App
-        run: az webapp restart \
-             --name ${{ secrets.rawsolutions }} \
-             --resource-group ${{ secrets.rawsolutions_group }}
-
-      - name: Health Check
         run: |
+          az webapp restart \
+            --resource-group ${{ secrets.rawsolutions_group }} \
+            --name ${{ secrets.rawsolutions }}
+
+      - name: Post-deploy health check
+        run: |
+          echo "🔍 Checking /health endpoint..."
           for i in {1..30}; do
             if curl -sf ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}/health; then
-              echo "✅ App is healthy!"
+              echo "✅ Health check passed"
               exit 0
             fi
             echo "Waiting for app..."
