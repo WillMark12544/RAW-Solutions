@@ -19,8 +19,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Debug:list artifacts in the triggering CI run 
+        run: |
+          echo "CI run ID: ${{ github.event.workflow_run.id }}"
+          curl -sL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
+          | jq '.artifacts[].name' || echo "No artifacts found!"
 
-      # ✅ Download artifact directly from the CI run using GitHub API
       - name: Download Docker image artifact from CI run
         run: |
           echo "Fetching artifact from CI run ID: ${{ github.event.workflow_run.id }}"
@@ -28,18 +35,19 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
-            | jq -r '.artifacts[] | select(.name=="notes-webapp-image") | .archive_download_url' > url.txt
+          | jq -r '.artifacts[] | select(.name | contains("notes-webapp-image")) | .archive_download_url' > url.txt
 
           ARTIFACT_URL=$(cat url.txt)
           if [ -z "$ARTIFACT_URL" ]; then
-            echo "❌ Artifact 'notes-webapp-image' not found in CI run!"
+            echo "❌ Artifact not found in this run. Check artifact names above."
             exit 1
           fi
 
-          echo "Downloading artifact from $ARTIFACT_URL"
+          echo "✅ Found artifact URL, downloading..."
           curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o artifact.zip "$ARTIFACT_URL"
+          mkdir -p ./image
+          unzip -q artifact.zip -d ./image
 
-          mkdir -p ./image && unzip -q artifact.zip -d ./image
 
       - name: Load Docker image
         run: docker load -i ./image/notes_web_app.tar
