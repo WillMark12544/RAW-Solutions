@@ -7,34 +7,44 @@ on:
     branches: [master]
   workflow_dispatch: {}
 
-permissions:
-  contents: read
-  actions: read   # needed to download artifacts from another run
-
 jobs:
   deploy-to-azure:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      actions: read   # ✅ allows API download of artifacts
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Download artifact from the triggering CI run (only when fired by workflow_run)
+      # ✅ Download artifact directly from the CI run using GitHub API
       - name: Download Docker image artifact from CI run
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: dawidd6/action-download-artifact@v3
-        with:
-          workflow: "CI DevSecOps Pipeline"
-          run_id: ${{ github.event.workflow_run.id }}
-          name: notes-webapp-image
-          path: ./image
+        run: |
+          echo "Fetching artifact from CI run ID: ${{ github.event.workflow_run.id }}"
+          curl -sL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
+            | jq -r '.artifacts[] | select(.name=="notes-webapp-image") | .archive_download_url' > url.txt
+
+          ARTIFACT_URL=$(cat url.txt)
+          if [ -z "$ARTIFACT_URL" ]; then
+            echo "❌ Artifact 'notes-webapp-image' not found in CI run!"
+            exit 1
+          fi
+
+          echo "Downloading artifact from $ARTIFACT_URL"
+          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o artifact.zip "$ARTIFACT_URL"
+
+          mkdir -p ./image && unzip -q artifact.zip -d ./image
 
       - name: Load Docker image
         run: docker load -i ./image/notes_web_app.tar
 
-      - name: Tag Docker image for Azure
+      - name: Tag Docker image
         run: docker tag notes_web_app:latest notes_web_app:release
 
       - name: Azure Login
@@ -49,12 +59,18 @@ jobs:
           images: notes_web_app:release
 
       - name: Restart Web App
-        run: |
-          az webapp restart \
-            --name ${{ secrets.rawsolutions }} \
-            --resource-group ${{ secrets.rawsolutions_group }}
+        run: az webapp restart \
+             --name ${{ secrets.rawsolutions }} \
+             --resource-group ${{ secrets.rawsolutions_group }}
 
       - name: Health Check
         run: |
           for i in {1..30}; do
             if curl -sf ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}/health; then
+              echo "✅ App is healthy!"
+              exit 0
+            fi
+            echo "Waiting for app..."
+            sleep 5
+          done
+          echo "❌ App failed health check" && exit 1
