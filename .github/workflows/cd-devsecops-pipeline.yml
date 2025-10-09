@@ -1,56 +1,65 @@
-name: CD (Docker Deploy to Azure – No Artifacts)
+name: CD (Deploy Docker Artifact to Azure)
 
 on:
-  workflow_dispatch:            # allows you to run manually
-  push:
-    branches: [master]            # change to 'master' if your default branch
+  workflow_run:
+    workflows: ["CI DevSecOps Pipeline"]   # must match the CI workflow name exactly
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}                     # allows manual trigger
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest 
+  deploy-to-azure:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # 1️⃣ Download the Docker image artifact produced by CI
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: notes-webapp-image
+          path: ./image
 
-      - name: Login to Azure
+      # 2️⃣ Load the Docker image
+      - name: Load Docker image
+        run: docker load -i ./image/notes_web_app.tar
+
+      # 3️⃣ Tag image for Azure deployment
+      - name: Tag Docker image
+        run: docker tag notes_web_app:latest notes_web_app:release
+
+      # 4️⃣ Login to Azure
+      - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Azure Container Registry Login
-        run: az acr login --name ${{ secrets.ACR_NAME }}
-
-      - name: Build and Push Docker Image to ACR
-        run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest -f NotesSampleApplication/Dockerfile .
-          docker push ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest
-
-      - name: Update Azure Web App to use latest image
-        run: |
-          az webapp config container set \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ secrets.AZ_RG }} \
-            --docker-custom-image-name ${{ secrets.ACR_LOGIN_SERVER }}/notes_web_app:latest \
-            --docker-registry-server-url https://${{ secrets.ACR_LOGIN_SERVER }}
-
-  zap-scan:
-    name: Post-deploy ZAP Scan
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0
+      # 5️⃣ Deploy container directly to Azure App Service
+      - name: Deploy container to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
-          target: ${{ secrets.PROD_URL }}
-          allow_issue_writing: false
-          cmd_options: >-
-            -m 10 -t ${{ secrets.PROD_URL }} -r zap-report.html
+          app-name: ${{ secrets.rawsolutions }}
+          images: notes_web_app:release
 
-      - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-postdeploy-report
-          path: zap-report.html
+      # 6️⃣ Restart web app
+      - name: Restart Azure Web App
+        run: |
+          az webapp restart \
+            --name ${{ secrets.rawsolutions }} \
+            --resource-group ${{ secrets.rawsolutions_group }}
+
+      # 7️⃣ Verify the deployment (health endpoint)
+      - name: Health Check
+        run: |
+          for i in {1..30}; do
+            if curl -sf ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}/health; then
+              echo "✅ App is healthy!"
+              exit 0
+            fi
+            echo "Waiting for app to become healthy..."
+            sleep 5
+          done
+          echo "❌ App failed health check" && exit 1
