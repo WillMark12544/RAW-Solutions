@@ -5,7 +5,7 @@ on:
     workflows: ["CI DevSecOps Pipeline"]   # must match CI 'name'
     types: [completed]
     branches: [master]
-  workflow_dispatch: {}                    # manual trigger for testing
+             
 
 jobs:
   deploy-to-azure:
