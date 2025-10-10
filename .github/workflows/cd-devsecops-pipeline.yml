@@ -1,54 +1,51 @@
-name: CD (Zip Deploy to Azure Web App - Windows)
+name: CD (Deploy Docker Image to Azure)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]   # must match your CI workflow name
+    workflows: ["CI DevSecOps Pipeline"] # must match CI 'name'
     types: [completed]
-    branches: [master]                     # change to [main] if your repo uses main
-  workflow_dispatch: {}                    # optional manual trigger
-
-permissions:
-  contents: read
-  actions: read
+    branches: [master]
+  workflow_dispatch: {} # manual trigger for testing
 
 jobs:
-  deploy-zip:
+  deploy-to-azure:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up .NET 8
-        uses: actions/setup-dotnet@v5
+      - name: Download Docker image artifact from CI run
+        uses: actions/download-artifact@v4
         with:
-          dotnet-version: '8.0.x'          # change if your app targets a different version
+          name: notes-webapp-image
+          path: ./notes-webapp-image
+          run-id: ${{ github.event.workflow_run.id }}
 
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build & Publish (Release)
-        run: dotnet publish NotesSampleApplication/NotesSampleApplication.csproj -c Release -o ./publish
-        # ^ If your .csproj path is different, update this line.
-
-      - name: Create deploy zip
+      - name: Verify artifact contents
         run: |
-          cd publish
-          zip -r ../app.zip .
-          cd ..
-          ls -lh app.zip
+          echo "📦 Listing artifact files:"
+          ls -R ./notes-webapp-image
+
+      - name: Load Docker image
+        run: docker load -i ./notes-webapp-image/notes_web_app.tar
+
+      - name: Tag Docker image for release
+        run: docker tag notes_web_app:latest notes_web_app:release
 
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Zip Deploy to Azure Web App
+      - name: Deploy image to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}   # e.g., rawsolutions
-          package: app.zip
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }} # e.g., rawsolution
+          images: notes_web_app:release
 
       - name: Restart Web App
         run: |
@@ -58,13 +55,13 @@ jobs:
 
       - name: Post-deploy health check
         run: |
-          echo "🔍 Checking ${{ secrets.PROD_URL }} ..."
+          echo "🔍 Checking /health endpoint..."
           for i in {1..30}; do
-            if curl -sf "${{ secrets.PROD_URL }}"; then
-              echo "✅ Site is live"
+            if curl -sf ${{ secrets.PROD_URL }}/health; then
+              echo "✅ Health check passed"
               exit 0
             fi
             echo "Waiting for app..."
             sleep 5
           done
-          echo "❌ App did not respond in time" && exit 1
+          echo "❌ App failed health check" && exit 1
