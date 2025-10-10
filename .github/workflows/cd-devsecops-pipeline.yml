@@ -15,7 +15,7 @@ env:
   # ⚠️ UPDATE THESE VALUES:
   CONTAINER_APP_NAME: rawsolutions-web               # Must match your Container App name
   RESOURCE_GROUP: rawsolutions-production-rg         # Must match your Resource Group name
-  IMAGE_NAME: ghcr.io/willmark12544/notes-web-app:latest # e.g., ghcr.io/johnsmith/myapp
+  IMAGE_NAME: ghcr.io/willmark12544/notes-web-app # e.g., ghcr.io/johnsmith/myapp
 
 jobs:
   deploy:
