@@ -9,7 +9,7 @@ on:
       - completed
 
   # Allow manual deployment from Actions tab
-  workflow_dispatch:
+  workflow_dispatch: 
 
 env:
   # ⚠️ UPDATE THESE VALUES:
