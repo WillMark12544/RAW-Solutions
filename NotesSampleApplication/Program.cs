@@ -18,7 +18,7 @@ builder.Configuration.AddEnvironmentVariables();
 
 // 1. Connect to database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Add Identity (with ApplicationUser)
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -168,3 +168,4 @@ app.MapRazorPages(); // Required for Identity
 
 
 app.Run(); //Test Push
+
