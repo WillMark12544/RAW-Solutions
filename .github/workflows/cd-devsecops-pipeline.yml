@@ -1,16 +1,15 @@
-name: CD (Deploy Docker Image to Azure)
+name: CD (Deploy to Azure on Windows)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"] # must match CI 'name'
+    workflows: ["CI DevSecOps Pipeline"] # must exactly match your CI 'name'
     types: [completed]
     branches: [master]
-  workflow_dispatch: {} # manual trigger for testing
 
 jobs:
   deploy-to-azure:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
     permissions:
       contents: read
       actions: read
