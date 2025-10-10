@@ -1,8 +1,8 @@
-name: CD (Deploy Docker Image to Azure)
+name: CD (Zip Deploy to Azure Web App - Windows)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]   # must match CI 'name'
+    workflows: ["CI DevSecOps Pipeline"]
     types: [completed]
     branches: [master]
 
@@ -12,76 +12,40 @@ permissions:
   actions: read
 
 jobs:
-  deploy-to-azure:
+  deploy-zip:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # --- Debug: list artifacts on the triggering CI run ---
-      - name: Debug:list artifacts in CI run
-        if: ${{ github.event_name == 'workflow_run' }}
-        run: |
-          echo "CI run ID: ${{ github.event.workflow_run.id }}"
-          curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
-          | jq '.artifacts[] | {name: .name, expired: .expired, size: .size_in_bytes}'
-
-      # --- Download the artifact from the triggering CI run ---
-      - name: Download Docker image artifact from CI run
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: actions/download-artifact@v5
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
         with:
-          name: notes-webapp-image                  # MUST match CI upload name
-          path: ./image
-          run-id: ${{ github.event.workflow_run.id }}
+          dotnet-version: '8.0.x'
 
-      # If you manually run this workflow, the step above won't run and you'll need a separate manual path.
+      - name: Restore
+        run: dotnet restore
 
-      # --- Inspect & load image tar (auto-detect) ---
-      - name: Show artifact contents
+      - name: Build & Publish (Release)
+        run: dotnet publish NotesSampleApplication/NotesSampleApplication.csproj -c Release -o ./publish
+
+      - name: Create deploy zip
         run: |
-          echo "Listing ./image"
-          ls -lah ./image || true
-          find ./image -maxdepth 3 -type f -print || true
-
-      - name: Load Docker image (auto-detect .tar)
-        id: load
-        run: |
-          TAR=$(find ./image -maxdepth 3 -type f -name '*.tar' | head -n1)
-          if [ -z "$TAR" ]; then
-            echo "::error::No .tar found in ./image. Is the artifact name correct (notes-webapp-image)?"
-            exit 1
-          fi
-          echo "Loading: $TAR"
-          docker load -i "$TAR"
-          echo "Images after load:"
-          docker images --format '{{.Repository}}:{{.Tag}}' | sort
-          # Pick first repo:tag as source
-          SRC=$(docker images --format '{{.Repository}}:{{.Tag}}' | head -n1)
-          echo "src=$SRC" >> "$GITHUB_OUTPUT"
-
-      - name: Tag Docker image for release
-        run: |
-          SRC="${{ steps.load.outputs.src }}"
-          docker tag "$SRC" notes_web_app:release
+          cd publish
+          zip -r ../app.zip .
 
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ⚠️ This deploy step only works if the image is in a registry (e.g. ACR).
-      # You will need to push to ACR and set images: <acr>.azurecr.io/notes-web-app:release.
-      - name: Deploy image to Azure Web App
+      - name: Zip Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.rawsolutions }}   # e.g., rawsolutions
-          images: notes_web_app:release                # replace with ACR URL once you push
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}   # e.g., rawsolutions
+          package: app.zip
 
       - name: Restart Web App
         run: |
@@ -91,9 +55,11 @@ jobs:
 
       - name: Post-deploy health check
         run: |
-          echo "🔍 Checking /health at ${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}/health ..."
+          echo "🔍 Checking ${{
+            secrets.PROD_URL
+          }}/health ..."
           for i in {1..30}; do
-            if curl -sf "${{ secrets.rawsolutions-h6bkfhb7c3htcxhw.newzealandnorth-01.azurewebsites.net }}/health"; then
+            if curl -sf "${{ secrets.PROD_URL }}/health"; then
               echo "✅ Health check passed"
               exit 0
             fi
