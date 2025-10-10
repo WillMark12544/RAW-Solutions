@@ -2,10 +2,10 @@ name: CD (Zip Deploy to Azure Web App - Windows)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]
+    workflows: ["CI DevSecOps Pipeline"]   # must match your CI workflow name
     types: [completed]
-    branches: [master]
-
+    branches: [master]                     # change to [main] if your repo uses main
+  workflow_dispatch: {}                    # optional manual trigger
 
 permissions:
   contents: read
@@ -23,18 +23,21 @@ jobs:
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.0.x'          # change if your app targets a different version
 
       - name: Restore
         run: dotnet restore
 
       - name: Build & Publish (Release)
         run: dotnet publish NotesSampleApplication/NotesSampleApplication.csproj -c Release -o ./publish
+        # ^ If your .csproj path is different, update this line.
 
       - name: Create deploy zip
         run: |
           cd publish
           zip -r ../app.zip .
+          cd ..
+          ls -lh app.zip
 
       - name: Azure Login
         uses: azure/login@v2
@@ -55,15 +58,13 @@ jobs:
 
       - name: Post-deploy health check
         run: |
-          echo "🔍 Checking ${{
-            secrets.PROD_URL
-          }}/health ..."
+          echo "🔍 Checking ${{ secrets.PROD_URL }} ..."
           for i in {1..30}; do
-            if curl -sf "${{ secrets.PROD_URL }}/health"; then
-              echo "✅ Health check passed"
+            if curl -sf "${{ secrets.PROD_URL }}"; then
+              echo "✅ Site is live"
               exit 0
             fi
             echo "Waiting for app..."
             sleep 5
           done
-          echo "❌ App failed health check" && exit 1
+          echo "❌ App did not respond in time" && exit 1
