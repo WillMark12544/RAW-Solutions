@@ -1,36 +1,33 @@
-name: CD (Deploy to Azure on Windows)
+name: CD (Deploy Docker Image to Azure)
 
 on:
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"] # must match CI 'name'
+    workflows: ["CI DevSecOps Pipeline"]   # must exactly match your CI 'name'
     types: [completed]
-    branches: [master]
+  # (No branch filter — avoids mismatches when CI is workflow_dispatch or not on 'master')
 
 jobs:
   deploy-to-azure:
+    # Only run when CI concluded successfully
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
 
     steps:
-      - name: Checkout
+      - name: Checkout (for scripts/logs only)
         uses: actions/checkout@v4
 
-      # --- DIAGNOSTICS: confirm which CI run we're targeting -------------------
+      # --- DIAGNOSTICS: confirm which CI run we're attached to ----------------
       - name: Show triggering workflow_run info
-        shell: pwsh
         run: |
-          Write-Host "workflow_run.id: $env:RID"
-          Write-Host "workflow_run.name: $env:RNAME"
-          Write-Host "workflow_run.head_branch: $env:RBRANCH"
-        env:
-          RID: ${{ github.event.workflow_run.id }}
-          RNAME: ${{ github.event.workflow_run.name }}
-          RBRANCH: ${{ github.event.workflow_run.head_branch }}
+          echo "workflow_run.id: ${{ github.event.workflow_run.id }}"
+          echo "workflow_run.name: ${{ github.event.workflow_run.name }}"
+          echo "workflow_run.head_branch: ${{ github.event.workflow_run.head_branch }}"
 
       - name: List artifacts on the CI run
+        id: list_artifacts
         uses: actions/github-script@v7
         with:
           script: |
@@ -41,95 +38,73 @@ jobs:
               run_id: runId,
               per_page: 100,
             });
-            core.info(`Found ${data.artifacts.length} artifact(s):`);
+            core.info(`Found ${data.artifacts.length} artifact(s) on run ${runId}:`);
             for (const a of data.artifacts) {
               core.info(`- ${a.name} (expired=${a.expired}, size=${a.size_in_bytes})`);
             }
+            const has = data.artifacts.some(a => a.name === "notes-webapp-image" && !a.expired);
+            core.setOutput("has_notes_image", has ? "true" : "false");
         env:
           RUN_ID: ${{ github.event.workflow_run.id }}
 
-      # --- Download ALL artifacts from the CI run (no name filter!) -----------
-      - name: Download ALL artifacts from CI run
-        uses: actions/download-artifact@v4
-        with:
-          path: ./_ci_artifacts
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Verify downloaded files
-        shell: pwsh
+      - name: Fail early if required artifact missing
+        if: ${{ steps.list_artifacts.outputs.has_notes_image != 'true' }}
         run: |
-          Write-Host "📦 Contents of ./_ci_artifacts"
-          Get-ChildItem -Recurse ./_ci_artifacts | ForEach-Object { $_.FullName }
-
-      # --- Prepare a deployable ZIP package for Azure Web Apps -----------------
-      - name: Resolve deployment package
-        id: resolve_pkg
-        shell: pwsh
-        run: |
-          # 1) Prefer an existing *.zip (e.g., package.zip) anywhere under _ci_artifacts
-          $zips = Get-ChildItem -Recurse -File ./_ci_artifacts -Include *.zip | Select-Object -ExpandProperty FullName
-          if ($zips.Count -gt 0) {
-            Write-Host "Found existing ZIP package: $($zips[0])"
-            Copy-Item $zips[0] package.zip -Force
-            Write-Output "package=package.zip" >> $env:GITHUB_OUTPUT
-            exit 0
-          }
-
-          # 2) If no zip, see if we have a likely publish/build folder to zip
-          #    Heuristics: look for folders containing common webapp files
-          $candidates = Get-ChildItem -Recurse -Directory ./_ci_artifacts | Where-Object {
-            Test-Path (Join-Path $_.FullName "web.config") -or
-            (Get-ChildItem -Recurse -File $_.FullName -ErrorAction SilentlyContinue | Where-Object {
-              $_.Name -match '\.(dll|exe|csproj|deps\.json|runtimeconfig\.json|config|js|html|css)$'
-            })
-          } | Select-Object -ExpandProperty FullName -Unique
-
-          if ($candidates.Count -gt 0) {
-            $src = $candidates[0]
-            Write-Host "Zipping candidate folder: $src"
-            if (Test-Path package.zip) { Remove-Item package.zip -Force }
-            Compress-Archive -Path (Join-Path $src '*') -DestinationPath package.zip
-            Write-Output "package=package.zip" >> $env:GITHUB_OUTPUT
-            exit 0
-          }
-
-          # 3) If we only have Docker image TARs, fail with a clear message
-          $tars = Get-ChildItem -Recurse -File ./_ci_artifacts -Include *.tar | Select-Object -ExpandProperty FullName
-          if ($tars.Count -gt 0) {
-            Write-Error "Found Docker TAR(s) but no deployable ZIP. Windows runners cannot load Linux Docker images. Options: (a) change CD to 'ubuntu-latest' and deploy the container, or (b) change CI to produce a ZIP artifact for Web App ZIP deploy."
-            exit 1
-          }
-
-          Write-Error "No deployable ZIP or suitable build folder found under _ci_artifacts. Ensure CI uploads a 'package.zip' or a publish folder."
+          echo "❌ Required artifact 'notes-webapp-image' not found on the triggering CI run."
+          echo "Make sure CI uploaded it with:"
+          echo "  - uses: actions/upload-artifact@v4"
+          echo "    with: { name: notes-webapp-image, path: notes_web_app.tar }"
           exit 1
 
-      # --- Azure login & deploy via ZIP (Oryx) --------------------------------
+      # --- Download the Docker image TAR produced by CI -----------------------
+      - name: Download Docker image artifact from CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: notes-webapp-image                 # must match CI upload name
+          path: ./notes-webapp-image              # will contain notes_web_app.tar
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify artifact files
+        run: |
+          echo "📦 Listing artifact files:"
+          ls -l ./notes-webapp-image || true
+          test -f ./notes-webapp-image/notes_web_app.tar || (echo "notes_web_app.tar not found in artifact" && exit 1)
+
+      # --- Load & tag the image locally --------------------------------------
+      - name: Load Docker image
+        run: docker load -i ./notes-webapp-image/notes_web_app.tar
+
+      - name: Tag Docker image for release
+        run: docker tag notes_web_app:latest notes_web_app:release
+
+      # --- Azure login & deploy the container image to Web App ---------------
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy via ZIP to Azure Web App
+      - name: Deploy image to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          package: ${{ steps.resolve_pkg.outputs.package }}
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}   # e.g., rawsolutions
+          images: notes_web_app:release
 
       - name: Restart Web App
-        shell: pwsh
-        run: az webapp restart --resource-group ${{ secrets.AZ_RG }} --name ${{ secrets.AZURE_WEBAPP_NAME }}
+        run: |
+          az webapp restart \
+            --resource-group ${{ secrets.AZ_RG }} \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }}
 
       - name: Post-deploy health check
-        shell: pwsh
         env:
           PROD_URL: ${{ secrets.PROD_URL }}
         run: |
-          Write-Host "🔍 Checking /health..."
-          for ($i=1; $i -le 30; $i++) {
-            try {
-              $r = Invoke-WebRequest -Uri "$env:PROD_URL/health" -UseBasicParsing -TimeoutSec 5
-              if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 300) { Write-Host "✅ OK"; exit 0 }
-            } catch {}
-            Start-Sleep -Seconds 5
-          }
-          Write-Error "❌ Health check failed"; exit 1
+          echo "🔍 Checking $PROD_URL/health ..."
+          for i in {1..30}; do
+            if curl -sf "$PROD_URL/health"; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "Waiting for app to become healthy... ($i/30)"; sleep 5
+          done
+          echo "❌ App failed health check" && exit 1
