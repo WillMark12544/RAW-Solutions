@@ -40,9 +40,7 @@ jobs:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           imageToDeploy: ${{ env.IMAGE_NAME }}:latest
 
-      - name: Azure logout
-        if: always()
-        run: az logout
+      
 
       - name: Get deployment URL
         run: |
@@ -53,3 +51,7 @@ jobs:
             --query "properties.configuration.ingress.fqdn" \
             --output tsv)
           echo "::notice::🌐 Application URL: https://$APP_URL"
+
+      - name: Azure logout
+        if: always()
+        run: az logout
