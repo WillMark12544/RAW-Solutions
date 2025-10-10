@@ -1,110 +1,55 @@
-name: CD (Deploy Docker Image to Azure)
+name: CD - Deploy to Azure Container Apps
 
 on:
+  # Trigger when the CI workflow completes
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]   # must exactly match your CI 'name'
-    types: [completed]
-  # (No branch filter — avoids mismatches when CI is workflow_dispatch or not on 'master')
+    workflows: ["CI DevSecOps Pipeline"]  # ⚠️ CHANGE to your CI workflow name
+    branches: [master]   # ⚠️ CHANGE if you use a different default branch
+    types:
+      - completed
+
+  # Allow manual deployment from Actions tab
+  workflow_dispatch:
+
+env:
+  # ⚠️ UPDATE THESE VALUES:
+  CONTAINER_APP_NAME: rawsolutions-web               # Must match your Container App name
+  RESOURCE_GROUP: rawsolutions-production-rg         # Must match your Resource Group name
+  IMAGE_NAME: ghcr.io/willmark12544/notes-web-app:latest # e.g., ghcr.io/johnsmith/myapp
 
 jobs:
-  deploy-to-azure:
-    # Only run when CI concluded successfully
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  deploy:
+    name: Deploy to Production
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
+    # Only run if CI succeeded OR if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      - name: Checkout (for scripts/logs only)
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- DIAGNOSTICS: confirm which CI run we're attached to ----------------
-      - name: Show triggering workflow_run info
-        run: |
-          echo "workflow_run.id: ${{ github.event.workflow_run.id }}"
-          echo "workflow_run.name: ${{ github.event.workflow_run.name }}"
-          echo "workflow_run.head_branch: ${{ github.event.workflow_run.head_branch }}"
-
-      - name: List artifacts on the CI run
-        id: list_artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const runId = Number(process.env.RUN_ID);
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: runId,
-              per_page: 100,
-            });
-            core.info(`Found ${data.artifacts.length} artifact(s) on run ${runId}:`);
-            for (const a of data.artifacts) {
-              core.info(`- ${a.name} (expired=${a.expired}, size=${a.size_in_bytes})`);
-            }
-            const has = data.artifacts.some(a => a.name === "notes-webapp-image" && !a.expired);
-            core.setOutput("has_notes_image", has ? "true" : "false");
-        env:
-          RUN_ID: ${{ github.event.workflow_run.id }}
-
-      - name: Fail early if required artifact missing
-        if: ${{ steps.list_artifacts.outputs.has_notes_image != 'true' }}
-        run: |
-          echo "❌ Required artifact 'notes-webapp-image' not found on the triggering CI run."
-          echo "Make sure CI uploaded it with:"
-          echo "  - uses: actions/upload-artifact@v4"
-          echo "    with: { name: notes-webapp-image, path: notes_web_app.tar }"
-          exit 1
-
-      # --- Download the Docker image TAR produced by CI -----------------------
-      - name: Download Docker image artifact from CI run
-        uses: actions/download-artifact@v4
-        with:
-          name: notes-webapp-image                 # must match CI upload name
-          path: ./notes-webapp-image              # will contain notes_web_app.tar
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Verify artifact files
-        run: |
-          echo "📦 Listing artifact files:"
-          ls -l ./notes-webapp-image || true
-          test -f ./notes-webapp-image/notes_web_app.tar || (echo "notes_web_app.tar not found in artifact" && exit 1)
-
-      # --- Load & tag the image locally --------------------------------------
-      - name: Load Docker image
-        run: docker load -i ./notes-webapp-image/notes_web_app.tar
-
-      - name: Tag Docker image for release
-        run: docker tag notes_web_app:latest notes_web_app:release
-
-      # --- Azure login & deploy the container image to Web App ---------------
-      - name: Azure Login
-        uses: azure/login@v2
+      - name: Log in to Azure
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy image to Azure Web App
-        uses: azure/webapps-deploy@v3
+      - name: Deploy to Azure Container Apps
+        uses: azure/container-apps-deploy-action@v1
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}   # e.g., rawsolutions
-          images: notes_web_app:release
+          containerAppName: ${{ env.CONTAINER_APP_NAME }}
+          resourceGroup: ${{ env.RESOURCE_GROUP }}
+          imageToDeploy: ${{ env.IMAGE_NAME }}:latest
 
-      - name: Restart Web App
-        run: |
-          az webapp restart \
-            --resource-group ${{ secrets.AZ_RG }} \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }}
+      - name: Azure logout
+        if: always()
+        run: az logout
 
-      - name: Post-deploy health check
-        env:
-          PROD_URL: ${{ secrets.PROD_URL }}
+      - name: Get deployment URL
         run: |
-          echo "🔍 Checking $PROD_URL/health ..."
-          for i in {1..30}; do
-            if curl -sf "$PROD_URL/health"; then
-              echo "✅ Health check passed"
-              exit 0
-            fi
-            echo "Waiting for app to become healthy... ($i/30)"; sleep 5
-          done
-          echo "❌ App failed health check" && exit 1
+          echo "::notice::🚀 Deployment complete!"
+          APP_URL=$(az containerapp show \
+            --name "${{ env.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "properties.configuration.ingress.fqdn" \
+            --output tsv)
+          echo "::notice::🌐 Application URL: https://$APP_URL"
