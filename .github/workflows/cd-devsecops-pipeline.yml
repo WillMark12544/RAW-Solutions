@@ -3,8 +3,8 @@ name: CD - Deploy to Azure Container Apps
 on:
   # Trigger when the CI workflow completes
   workflow_run:
-    workflows: ["CI DevSecOps Pipeline"]  # ⚠️ CHANGE to your CI workflow name
-    branches: [master]   # ⚠️ CHANGE if you use a different default branch
+    workflows: ["CI DevSecOps Pipeline"]  # CHANGE to your CI workflow name
+    branches: [master]   #  CHANGE if you use a different default branch
     types:
       - completed
 
@@ -12,7 +12,7 @@ on:
   workflow_dispatch: 
 
 env:
-  # ⚠️ UPDATE THESE VALUES:
+  #  UPDATE THESE VALUES:
   CONTAINER_APP_NAME: rawsolutions-web               # Must match your Container App name
   RESOURCE_GROUP: rawsolutions-production-rg         # Must match your Resource Group name
   IMAGE_NAME: ghcr.io/willmark12544/notes-web-app # e.g., ghcr.io/johnsmith/myapp
@@ -44,13 +44,13 @@ jobs:
 
       - name: Get deployment URL
         run: |
-          echo "::notice::🚀 Deployment complete!"
+          echo "::notice:: Deployment complete!"
           APP_URL=$(az containerapp show \
             --name "${{ env.CONTAINER_APP_NAME }}" \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --query "properties.configuration.ingress.fqdn" \
             --output tsv)
-          echo "::notice::🌐 Application URL: https://$APP_URL"
+          echo "::notice:: Application URL: https://$APP_URL"
 
       - name: Azure logout
         if: always()
