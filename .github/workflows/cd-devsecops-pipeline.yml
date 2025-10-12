@@ -1,5 +1,4 @@
-name: CD - Deploy to Azure Container Apps
-
+name: CD DevSecOps Pipeline
 on:
   # Trigger when the CI workflow completes
   workflow_run:
